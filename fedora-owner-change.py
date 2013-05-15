@@ -89,7 +89,7 @@ def retrieve_pkgdb_change():
     page = 1
     pages = 2
     while page <= pages:
-        LOG.debug('Retrieving page %s of %s' %(page, pages))
+        LOG.debug('Retrieving page %s of %s' % (page, pages))
         data = {'delta': DELTA,
                 'topic': TOPIC,
                 'rows_per_page': 100,
@@ -127,12 +127,12 @@ def main():
         LOG.debug('%s changed to %s by %s on %s' % (
                   pkg_name, owner, user, branch))
         pkg = PkgChange(
-                name=pkg_name,
-                summary=change['msg']['package_listing']['package']['summary'],
-                branch=branch,
-                new_owner=owner,
-                user=user,
-                )
+            name=pkg_name,
+            summary=change['msg']['package_listing']['package']['summary'],
+            branch=branch,
+            new_owner=owner,
+            user=user,
+        )
 
         if owner == 'orphan':
             if pkg_name in orphaned:
