@@ -30,7 +30,7 @@ import sys
 
 
 DATAGREPPER_URL = 'https://apps.fedoraproject.org/datagrepper/raw/'
-DELTA = '86400'  # time in seconds: 24 * 60 * 60 = 24h
+DELTA = 1 * 24 * 60 * 60  # 1 day
 TOPIC = 'org.fedoraproject.prod.pkgdb.owner.update'
 
 # Initial simple logging stuff
@@ -56,11 +56,29 @@ class PkgChange(object):
         """ Add a branch to the current ones. """
         self.branch.append(branch)
 
-    def __repr__(self):
-        """ String representation of the object. """
-        return u'%s [%s] was changed to "%s" by %s' % (
-            self.name, ','.join(sorted(self.branch)),
-            self.new_owner, self.user)
+    def unorphaned(self):
+        """ Returns a boolean specifying if the package has been
+        unorphaned or not.
+        """
+        return self.new_owner == self.user
+
+    def to_string(self):
+        """ String representation of the object adjusted for the
+        ownership change.
+        """
+        if self.new_owner == self.user:
+            output = u'%s [%s] was unorphaned by %s' % (
+                self.name, ','.join(sorted(self.branch)),
+                self.user)
+        elif self.new_owner == 'orphan':
+            output = u'%s [%s] was orphaned by %s' % (
+                self.name, ','.join(sorted(self.branch)),
+                self.user)
+        else:
+            output = u'%s [%s] was changed to "%s" by %s' % (
+                self.name, ','.join(sorted(self.branch)),
+                self.new_owner, self.user)
+        return output
 
 
 def retrieve_pkgdb_change():
@@ -99,19 +117,21 @@ def main():
     changes = retrieve_pkgdb_change()
     LOG.debug('%s changes retrieved' % len(changes))
     orphaned = {}
+    unorphaned = {}
     changed = {}
     for change in changes:
         pkg_name = change['msg']['package_listing']['package']['name']
         owner = change['msg']['package_listing']['owner']
         branch = change['msg']['package_listing']['collection']['branchname']
+        user = change['msg']['agent']
         LOG.debug('%s changed to %s by %s on %s' % (
-                  pkg_name, owner, change['msg']['agent'], branch))
+                  pkg_name, owner, user, branch))
         pkg = PkgChange(
                 name=pkg_name,
                 summary=change['msg']['package_listing']['package']['summary'],
                 branch=branch,
                 new_owner=owner,
-                user=change['msg']['agent'],
+                user=user,
                 )
 
         if owner == 'orphan':
@@ -119,6 +139,14 @@ def main():
                 orphaned[pkg_name].add_branch(branch)
             else:
                 orphaned[pkg_name] = pkg
+        elif owner == user:
+            if pkg_name in orphaned:
+                del(orphaned[pkg_name])
+
+            if pkg_name in changed:
+                unorphaned[pkg_name].add_branch(branch)
+            else:
+                unorphaned[pkg_name] = pkg
         else:
             if pkg_name in orphaned:
                 del(orphaned[pkg_name])
@@ -131,15 +159,22 @@ def main():
     print '%s packages were orphaned' % len(orphaned)
     print '-' * (len(str(len(orphaned))) + 23)
     for pkg in orphaned:
-        print orphaned[pkg]
+        print orphaned[pkg].to_string()
         print ' ' * 5, orphaned[pkg].summary
         print ' ' * 5, 'https://admin.fedoraproject.org/pkgdb/'\
                        'acls/name/%s\n' % orphaned[pkg].name
-    
+
+    print '\n%s packages unorphaned' % len(unorphaned)
+    print '-' * (len(str(len(unorphaned))) + 20)
+    for pkg in unorphaned:
+        if unorphaned[pkg].unorphaned():
+            print unorphaned[pkg].to_string(), '\n'
+
     print '\n%s packages changed owner' % len(changed)
     print '-' * (len(str(len(changed))) + 23)
     for pkg in changed:
-        print changed[pkg], '\n'
+        if not changed[pkg].unorphaned():
+            print changed[pkg].to_string(), '\n'
 
 
 if __name__ == '__main__':
