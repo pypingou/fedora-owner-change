@@ -37,6 +37,9 @@ TOPIC = 'org.fedoraproject.prod.pkgdb.owner.update'
 logging.basicConfig()
 LOG = logging.getLogger("owner-change")
 
+if '--debug' in sys.argv:
+    LOG.setLevel(logging.DEBUG)
+
 
 class PkgChange(object):
 
@@ -65,7 +68,8 @@ def retrieve_pkgdb_change():
     on packages of pkgdb over the DELTA period of time.
     """
     data = {'delta': DELTA,
-            'topic': TOPIC
+            'topic': TOPIC,
+            'rows_per_page': 100
             }
     output = requests.get(DATAGREPPER_URL, params=data)
     json_output = json.loads(output.text)
@@ -90,6 +94,8 @@ def main():
         pkg_name = change['msg']['package_listing']['package']['name']
         owner = change['msg']['package_listing']['owner']
         branch = change['msg']['package_listing']['collection']['branchname']
+        LOG.debug('%s changed to %s by %s on %s' % (
+                  pkg_name, owner, change['msg']['agent'], branch))
         pkg = PkgChange(
                 name=pkg_name,
                 summary=change['msg']['package_listing']['package']['summary'],
