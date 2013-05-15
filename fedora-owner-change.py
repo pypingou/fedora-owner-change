@@ -67,13 +67,24 @@ def retrieve_pkgdb_change():
     """ Query datagrepper to retrieve the list of change in ownership
     on packages of pkgdb over the DELTA period of time.
     """
-    data = {'delta': DELTA,
-            'topic': TOPIC,
-            'rows_per_page': 100
-            }
-    output = requests.get(DATAGREPPER_URL, params=data)
-    json_output = json.loads(output.text)
-    return json_output
+    messages = []
+    page = 1
+    pages = 2
+    while page <= pages:
+        LOG.debug('Retrieving page %s of %s' %(page, pages))
+        data = {'delta': DELTA,
+                'topic': TOPIC,
+                'rows_per_page': 100,
+                'page': page,
+                }
+        output = requests.get(DATAGREPPER_URL, params=data)
+        json_output = json.loads(output.text)
+        pages = json_output['pages']
+        page += 1
+        messages.extend(json_output['raw_messages'])
+
+    LOG.debug('Should have retrieved %s' % json_output['total'])
+    return messages
 
 
 def main():
@@ -85,9 +96,8 @@ def main():
     print 'Change in ownership over the last %s hours' % hours
     print '=' * (40 + len(str(hours))), '\n'
 
-    data_grepper = retrieve_pkgdb_change()
-    LOG.debug('%s changes retrieved' % data_grepper['total'])
-    changes = data_grepper['raw_messages']
+    changes = retrieve_pkgdb_change()
+    LOG.debug('%s changes retrieved' % len(changes))
     orphaned = {}
     changed = {}
     for change in changes:
