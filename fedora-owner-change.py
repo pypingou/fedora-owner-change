@@ -21,6 +21,7 @@ its messages catched by datanommer and available via datagrepper.
 
 Dependencies:
 * python-requests
+* python-argparse
 """
 
 import argparse
