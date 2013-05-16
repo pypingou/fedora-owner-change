@@ -23,22 +23,25 @@ Dependencies:
 * python-requests
 """
 
+import argparse
 import json
 import logging
 import requests
+import smtplib
 import sys
+
+from email.mime.text import MIMEText
 
 
 DATAGREPPER_URL = 'https://apps.fedoraproject.org/datagrepper/raw/'
 DELTA = 1 * 24 * 60 * 60  # 1 day
 TOPIC = 'org.fedoraproject.prod.pkgdb.owner.update'
+EMAIL_TO = 'pingou@pingoured.fr'
+SMTP_SERVER = 'localhost'
 
 # Initial simple logging stuff
 logging.basicConfig()
 LOG = logging.getLogger("owner-change")
-
-if '--debug' in sys.argv:
-    LOG.setLevel(logging.DEBUG)
 
 
 class PkgChange(object):
@@ -81,6 +84,25 @@ class PkgChange(object):
         return output
 
 
+def send_report(report):
+    """ This function sends the actual report.
+    :arg report: the content to send by email
+    """
+    msg = MIMEText(report)
+    msg['Subject'] = '[Owner-change] Fedora packages ownership change'
+    from_email = 'pingou@pingoured.fr'
+    msg['From'] = from_email
+    msg['To'] = EMAIL_TO
+
+    # Send the message via our own SMTP server, but don't include the
+    # envelope header.
+    s = smtplib.SMTP(SMTP_SERVER)
+    s.sendmail(from_email,
+               EMAIL_TO,
+               msg.as_string())
+    s.quit()
+
+
 def retrieve_pkgdb_change():
     """ Query datagrepper to retrieve the list of change in ownership
     on packages of pkgdb over the DELTA period of time.
@@ -105,14 +127,32 @@ def retrieve_pkgdb_change():
     return messages
 
 
+def setup_parser():
+    """
+    Set the command line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        prog="fedora-owner-change")
+    parser.add_argument(
+        '--nomail', action='store_true',
+        help="Prints the report instead of sending it by email")
+    parser.add_argument(
+        '--debug', action='store_true',
+        help="Outputs debugging info")
+    return parser
+
+
 def main():
     """ Retrieve all the change in ownership from pkgdb via datagrepper
     and report the changes either as packages have been orphaned or
     packages changed owner.
     """
-    hours = int(DELTA) / 3600
-    print 'Change in ownership over the last %s hours' % hours
-    print '=' * (40 + len(str(hours))), '\n'
+    parser = setup_parser()
+    args = parser.parse_args()
+
+    global LOG
+    if args.debug:
+        LOG.setLevel(logging.DEBUG)
 
     changes = retrieve_pkgdb_change()
     LOG.debug('%s changes retrieved' % len(changes))
@@ -156,25 +196,34 @@ def main():
             else:
                 changed[pkg_name] = pkg
 
-    print '%s packages were orphaned' % len(orphaned)
-    print '-' * (len(str(len(orphaned))) + 23)
-    for pkg in orphaned:
-        print orphaned[pkg].to_string()
-        print ' ' * 5, orphaned[pkg].summary
-        print ' ' * 5, 'https://admin.fedoraproject.org/pkgdb/'\
-                       'acls/name/%s\n' % orphaned[pkg].name
+    hours = int(DELTA) / 3600
+    report = 'Change in ownership over the last %s hours\n' % hours
+    report += '=' * (40 + len(str(hours))) + '\n'
 
-    print '\n%s packages unorphaned' % len(unorphaned)
-    print '-' * (len(str(len(unorphaned))) + 20)
+    report += '%s packages were orphaned\n' % len(orphaned)
+    report += '-' * (len(str(len(orphaned))) + 23) + '\n'
+    for pkg in orphaned:
+        report += orphaned[pkg].to_string() + '\n'
+        report += ' ' * 5 + orphaned[pkg].summary + '\n'
+        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
+            'acls/name/%s\n' % orphaned[pkg].name
+
+    report += '\n%s packages unorphaned\n' % len(unorphaned)
+    report += '-' * (len(str(len(unorphaned))) + 20) + '\n'
     for pkg in unorphaned:
         if unorphaned[pkg].unorphaned():
-            print unorphaned[pkg].to_string(), '\n'
+            report += unorphaned[pkg].to_string() + '\n'
 
-    print '\n%s packages changed owner' % len(changed)
-    print '-' * (len(str(len(changed))) + 23)
+    report += '\n%s packages changed owner\n' % len(changed)
+    report += '-' * (len(str(len(changed))) + 23) + '\n'
     for pkg in changed:
         if not changed[pkg].unorphaned():
-            print changed[pkg].to_string(), '\n'
+            report += changed[pkg].to_string() + '\n'
+
+    if args.nomail:
+        print report
+    else:
+        send_report(report)
 
 
 if __name__ == '__main__':
