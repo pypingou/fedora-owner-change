@@ -37,7 +37,8 @@ from email.mime.text import MIMEText
 DATAGREPPER_URL = 'https://apps.fedoraproject.org/datagrepper/raw/'
 DELTA = 1 * 24 * 60 * 60  # 1 day
 TOPIC = 'org.fedoraproject.prod.pkgdb.owner.update'
-EMAIL_TO = 'pingou@pingoured.fr'
+EMAIL_TO = ''
+EMAIL_FROM = ''
 SMTP_SERVER = 'localhost'
 
 # Initial simple logging stuff
@@ -91,14 +92,13 @@ def send_report(report):
     """
     msg = MIMEText(report)
     msg['Subject'] = '[Owner-change] Fedora packages ownership change'
-    from_email = 'pingou@pingoured.fr'
-    msg['From'] = from_email
+    msg['From'] = EMAIL_FROM
     msg['To'] = EMAIL_TO
 
     # Send the message via our own SMTP server, but don't include the
     # envelope header.
     s = smtplib.SMTP(SMTP_SERVER)
-    s.sendmail(from_email,
+    s.sendmail(EMAIL_FROM,
                EMAIL_TO,
                msg.as_string())
     s.quit()
