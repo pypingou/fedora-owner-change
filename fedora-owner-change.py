@@ -201,7 +201,7 @@ def main():
     report = 'Change in ownership over the last %s hours\n' % hours
     report += '=' * (40 + len(str(hours))) + '\n'
 
-    report += '%s packages were orphaned\n' % len(orphaned)
+    report += '\n%s packages were orphaned\n' % len(orphaned)
     report += '-' * (len(str(len(orphaned))) + 23) + '\n'
     for pkg in orphaned:
         report += orphaned[pkg].to_string() + '\n'
