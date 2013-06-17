@@ -72,17 +72,15 @@ class PkgChange(object):
         ownership change.
         """
         if self.new_owner == self.user:
-            output = u'%s [%s] was unorphaned by %s' % (
-                self.name, ','.join(sorted(self.branch)),
-                self.user)
+            output = u'%s unorphaned : %s [%s]' % (
+                self.user.ljust(15), self.name, ','.join(sorted(self.branch)))
         elif self.new_owner == 'orphan':
             output = u'%s [%s] was orphaned by %s' % (
-                self.name, ','.join(sorted(self.branch)),
-                self.user)
+                self.name, ','.join(sorted(self.branch)), self.user)
         else:
-            output = u'%s [%s] was changed to "%s" by %s' % (
-                self.name, ','.join(sorted(self.branch)),
-                self.new_owner, self.user)
+            output = u'%s gave to %s    : %s [%s]' % (
+                self.user.ljust(15), self.new_owner.ljust(15),
+                self.name, ','.join(sorted(self.branch)))
         return output
 
 
