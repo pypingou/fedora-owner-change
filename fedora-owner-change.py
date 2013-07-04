@@ -77,6 +77,9 @@ class PkgChange(object):
         elif self.new_owner == 'orphan':
             output = u'%s [%s] was orphaned by %s' % (
                 self.name, ','.join(sorted(self.branch)), self.user)
+        elif self.new_owner == 'retired':
+            output = u'%s [%s] was retired by %s' % (
+                self.name, ','.join(sorted(self.branch)), self.user)
         else:
             output = u'%s gave to %s    : %s [%s]' % (
                 self.user.ljust(15), self.new_owner.ljust(15),
@@ -113,6 +116,30 @@ def retrieve_pkgdb_change():
         LOG.debug('Retrieving page %s of %s' % (page, pages))
         data = {'delta': DELTA,
                 'topic': TOPIC,
+                'rows_per_page': 100,
+                'page': page,
+                }
+        output = requests.get(DATAGREPPER_URL, params=data)
+        json_output = json.loads(output.text)
+        pages = json_output['pages']
+        page += 1
+        messages.extend(json_output['raw_messages'])
+
+    LOG.debug('Should have retrieved %s' % json_output['total'])
+    return messages
+
+
+def retrieve_pkgdb_retired():
+    """ Query datagrepper to retrieve the list of package retired
+    in pkgdb over the DELTA period of time.
+    """
+    messages = []
+    page = 1
+    pages = 2
+    while page <= pages:
+        LOG.debug('Retrieving page %s of %s' % (page, pages))
+        data = {'delta': DELTA,
+                'topic': 'org.fedoraproject.prod.pkgdb.package.retire',
                 'rows_per_page': 100,
                 'page': page,
                 }
@@ -195,6 +222,18 @@ def main():
             else:
                 changed[pkg_name] = pkg
 
+    # Orphaned packages might have been deprecated:
+    retired_info = retrieve_pkgdb_retired()
+    retired = {}
+    for pkg in retired_info:
+        pkg_name = pkg['msg']['package_listing']['package']['name']
+        LOG.debug('Retired: %s' % (pkg_name))
+        if pkg_name in orphaned:
+            pkg = orphaned[pkg_name]
+            del(orphaned[pkg_name])
+            pkg.new_owner = 'retired'
+            retired[pkg_name] = pkg
+
     hours = int(DELTA) / 3600
     report = 'Change in ownership over the last %s hours\n' % hours
     report += '=' * (40 + len(str(hours))) + '\n'
@@ -212,6 +251,14 @@ def main():
     for pkg in unorphaned:
         if unorphaned[pkg].unorphaned():
             report += unorphaned[pkg].to_string() + '\n'
+
+    report += '\n%s packages were retired\n' % len(retired)
+    report += '-' * (len(str(len(retired))) + 23) + '\n'
+    for pkg in retired:
+        report += retired[pkg].to_string() + '\n'
+        report += ' ' * 5 + retired[pkg].summary + '\n'
+        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
+            'acls/name/%s\n' % retired[pkg].name
 
     report += '\n%s packages changed owner\n' % len(changed)
     report += '-' * (len(str(len(changed))) + 23) + '\n'
