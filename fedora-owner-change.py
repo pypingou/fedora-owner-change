@@ -214,7 +214,7 @@ def main():
             if pkg_name in orphaned:
                 del(orphaned[pkg_name])
 
-            if pkg_name in changed:
+            if pkg_name in unorphaned:
                 unorphaned[pkg_name].add_branch(branch)
             else:
                 unorphaned[pkg_name] = pkg
