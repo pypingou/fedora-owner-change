@@ -35,7 +35,7 @@ from email.mime.text import MIMEText
 
 
 DATAGREPPER_URL = 'https://apps.fedoraproject.org/datagrepper/raw/'
-DELTA = 1 * 24 * 60 * 60  # 1 day
+DELTA = 7 * 24 * 60 * 60  # 7 days
 TOPIC = 'org.fedoraproject.prod.pkgdb.owner.update'
 EMAIL_TO = ''
 EMAIL_FROM = ''
@@ -56,6 +56,11 @@ class PkgChange(object):
         self.branch = [branch]
         self.new_owner = new_owner
         self.user = user
+
+    def __repr__(self):
+        return '<PkgChange(Name:{0}, branch:[{1}], new_owner:{2}, '\
+            'user:{3})>'.format(self.name, ','.join(self.branch),
+                                self.new_owner, self.user)
 
     def add_branch(self, branch):
         """ Add a branch to the current ones. """
