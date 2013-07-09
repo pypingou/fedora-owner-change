@@ -266,6 +266,8 @@ def main():
         if not changed[pkg].unorphaned():
             report += changed[pkg].to_string() + '\n'
 
+    report += '\n\nSources: https://github.com/pypingou/fedora-owner-change'
+
     if args.nomail:
         print report
     else:
