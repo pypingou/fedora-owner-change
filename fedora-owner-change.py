@@ -96,6 +96,7 @@ def send_report(report):
     """ This function sends the actual report.
     :arg report: the content to send by email
     """
+    report = report.encode('utf-8', 'replace')
     msg = MIMEText(report)
     msg['Subject'] = '[Owner-change] Fedora packages ownership change'
     msg['From'] = EMAIL_FROM
