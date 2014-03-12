@@ -66,6 +66,11 @@ class PkgChange(object):
         """ Add a branch to the current ones. """
         self.branch.append(branch)
 
+    def del_branch(self, branch):
+        """ Remove a branch to the current ones. """
+        if branch in self.branch:
+            del self.branch[self.branch.index(branch)]
+
     def unorphaned(self):
         """ Returns a boolean specifying if the package has been
         unorphaned or not.
@@ -124,7 +129,7 @@ def retrieve_pkgdb_change():
                 'topic': TOPIC,
                 'rows_per_page': 100,
                 'page': page,
-                'order': 'desc',
+                'order': 'asc',
                 }
         output = requests.get(DATAGREPPER_URL, params=data)
         json_output = json.loads(output.text)
@@ -149,7 +154,7 @@ def retrieve_pkgdb_retired():
                 'topic': 'org.fedoraproject.prod.pkgdb.package.retire',
                 'rows_per_page': 100,
                 'page': page,
-                'order': 'desc',
+                'order': 'asc',
                 }
         output = requests.get(DATAGREPPER_URL, params=data)
         json_output = json.loads(output.text)
@@ -190,6 +195,7 @@ def main():
 
     changes = retrieve_pkgdb_change()
     LOG.debug('%s changes retrieved' % len(changes))
+    pkgs = {}
     orphaned = {}
     unorphaned = {}
     changed = {}
@@ -198,7 +204,7 @@ def main():
         owner = change['msg']['package_listing']['owner']
         branch = change['msg']['package_listing']['collection']['branchname']
         user = change['msg']['agent']
-        LOG.debug('%s changed to %s by %s on %s' % (
+        LOG.debug('"%s" changed to %s by %s on %s' % (
                   pkg_name, owner, user, branch))
         pkg = PkgChange(
             name=pkg_name,
@@ -210,23 +216,39 @@ def main():
 
         if owner == 'orphan':
             LOG.debug('package orphaned')
-            if pkg_name in orphaned:
+            if branch in orphaned:
                 orphaned[pkg_name].add_branch(branch)
             else:
                 orphaned[pkg_name] = pkg
+
         elif owner == user:
             LOG.debug('package unorphaned')
-            if pkg_name in orphaned:
-                del(orphaned[pkg_name])
 
-            if pkg_name in unorphaned:
-                unorphaned[pkg_name].add_branch(branch)
+            changed_pkg = False
+            if pkg_name in orphaned and orphaned[pkg_name].user == pkg.user:
+                changed_pkg = True
+
+            if pkg_name in orphaned:
+                orphaned[pkg_name].del_branch(branch)
+                if not orphaned[pkg_name].branch:
+                    del orphaned[pkg_name]
+
+            if changed_pkg:
+                if pkg_name in changed:
+                    changed[pkg_name].add_branch(branch)
+                else:
+                    changed[pkg_name] = pkg
             else:
-                unorphaned[pkg_name] = pkg
+                if branch in unorphaned:
+                    unorphaned[pkg_name].add_branch(branch)
+                else:
+                    unorphaned[pkg_name] = pkg
         else:
             LOG.debug('package changed')
             if pkg_name in orphaned:
-                del(orphaned[pkg_name])
+                orphaned[pkg_name].del_branch(branch)
+                if not orphaned[pkg_name].branch:
+                    del(orphaned[pkg_name])
 
             if pkg_name in changed:
                 changed[pkg_name].add_branch(branch)
@@ -251,7 +273,7 @@ def main():
 
     report += '\n%s packages were orphaned\n' % len(orphaned)
     report += '-' * (len(str(len(orphaned))) + 23) + '\n'
-    for pkg in orphaned:
+    for pkg in sorted(orphaned):
         report += orphaned[pkg].to_string() + '\n'
         report += ' ' * 5 + orphaned[pkg].summary + '\n'
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
@@ -259,13 +281,13 @@ def main():
 
     report += '\n%s packages unorphaned\n' % len(unorphaned)
     report += '-' * (len(str(len(unorphaned))) + 20) + '\n'
-    for pkg in unorphaned:
+    for pkg in sorted(unorphaned):
         if unorphaned[pkg].unorphaned():
             report += unorphaned[pkg].to_string() + '\n'
 
     report += '\n%s packages were retired\n' % len(retired)
     report += '-' * (len(str(len(retired))) + 23) + '\n'
-    for pkg in retired:
+    for pkg in sorted(retired):
         report += retired[pkg].to_string() + '\n'
         report += ' ' * 5 + retired[pkg].summary + '\n'
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
