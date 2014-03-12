@@ -124,6 +124,7 @@ def retrieve_pkgdb_change():
                 'topic': TOPIC,
                 'rows_per_page': 100,
                 'page': page,
+                'order': 'desc',
                 }
         output = requests.get(DATAGREPPER_URL, params=data)
         json_output = json.loads(output.text)
@@ -148,6 +149,7 @@ def retrieve_pkgdb_retired():
                 'topic': 'org.fedoraproject.prod.pkgdb.package.retire',
                 'rows_per_page': 100,
                 'page': page,
+                'order': 'desc',
                 }
         output = requests.get(DATAGREPPER_URL, params=data)
         json_output = json.loads(output.text)
