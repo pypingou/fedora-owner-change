@@ -207,11 +207,13 @@ def main():
         )
 
         if owner == 'orphan':
+            LOG.debug('package orphaned')
             if pkg_name in orphaned:
                 orphaned[pkg_name].add_branch(branch)
             else:
                 orphaned[pkg_name] = pkg
         elif owner == user:
+            LOG.debug('package unorphaned')
             if pkg_name in orphaned:
                 del(orphaned[pkg_name])
 
@@ -220,6 +222,7 @@ def main():
             else:
                 unorphaned[pkg_name] = pkg
         else:
+            LOG.debug('package changed')
             if pkg_name in orphaned:
                 del(orphaned[pkg_name])
 
