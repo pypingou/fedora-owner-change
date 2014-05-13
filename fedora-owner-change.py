@@ -133,6 +133,38 @@ def __format_dict(dic):
     return output
 
 
+def get_category(message):
+    """ For a given message specify if it has been orphaned, retired,
+    unorphaned, unretired, given or changed.
+    """
+    output = None
+    if 'retirement' in message \
+            and message['retirement'] == 'retired':
+        output = 'retired'
+    elif 'retirement' in message \
+            and message['retirement'] == 'unretired':
+        output = 'unretired'
+    elif 'previous_owner' in message \
+            and message['package_listing']['owner'] == 'orphan':
+        output = 'orphaned'
+    elif 'previous_owner' in message \
+            and message['package_listing']['owner'] != 'orphan' \
+            and message['previous_owner'] == 'orphan':
+        output = 'unorphaned'
+    elif 'previous_owner' in message \
+            and message['package_listing']['owner'] == message['previous_owner'] \
+            and message['previous_owner'] != 'orphan':
+        output = 'new'
+    elif 'previous_owner' in message \
+            and message['package_listing']['owner'] != message['previous_owner'] \
+            and message['previous_owner'] != 'orphan':
+        output = 'given'
+    else:
+        LOG.info('Could not parse message %s', message)
+
+    return output
+
+
 def main():
     """ Retrieve all the change in ownership from pkgdb via datagrepper
     and report the changes either as packages have been orphaned or
@@ -147,11 +179,7 @@ def main():
 
     changes = retrieve_pkgdb_change()
     LOG.debug('%s changes retrieved' % len(changes))
-    orphaned = {}
-    retired = {}
-    unorphaned = {}
-    unretired = {}
-    changed = {}
+    packages = {}
     for change in changes:
         pkg_name = change['msg']['package_listing']['package']['name']
         owner = change['msg']['package_listing']['owner']
@@ -161,126 +189,147 @@ def main():
                   pkg_name, owner, user, branch, change['topic']))
 
         key = (pkg_name, branch)
+        if key not in packages:
+            packages[key] = {}
+        packages[key]['action'] = get_category(change['msg'])
+        packages[key]['msg'] = change['msg']
 
-        if 'retirement' in change['msg'] \
-                and change['msg']['retirement'] == 'retired':
-            LOG.debug('package retired')
+    actions = {}
+    for act in ['orphaned', 'unorphaned', 'retired', 'unretired', 'given',
+                'new']:
+        actions[act] = {}
 
-            if key in orphaned:
-                del orphaned[key]
-
-            value = {
-                'user': user,
-                'owner': owner,
-                'summary': change['msg']['package_listing']['package']['summary']}
-
-            retired[key] = value
-
-        elif 'retirement' in change['msg'] \
-                and change['msg']['retirement'] == 'unretired':
-            LOG.debug('package unretired')
-
-            if key in orphaned:
-                del orphaned[key]
-
-            value = {
-                'user': user,
-                'owner': owner,
-                'summary': change['msg']['package_listing']['package']['summary']}
-
-            unretired[key] = value
-
-        elif not 'retirement' in change['msg'] and owner == 'orphan':
-            LOG.debug('package orphaned')
-
-            value = {
-                'user': user,
-                'owner': owner,
-                'summary': change['msg']['package_listing']['package']['summary']}
-
-            orphaned[key] = value
-
-        elif not 'retirement' in change['msg'] and owner == user:
-            LOG.debug('package unorphaned')
-
-            self_change = False
-            if key in orphaned:
-                if 'by %s' % user in orphaned[key]:
-                    self_change = True
-                del orphaned[key]
-
-            value = {
-                'user': user,
-                'owner': owner,
-                'summary': change['msg']['package_listing']['package']['summary']}
-
-            if not self_change:
-                unorphaned[key] = value
-
-        else:
-            LOG.debug('package changed')
-
-            value = {
-                'user': user,
-                'owner': owner,
-                'summary': change['msg']['package_listing']['package']['summary']}
-
-            changed[key] = value
+    for package in sorted(packages) :
+        action = packages[package]['action']
+        if package[0] not in actions[action]:
+            actions[action][package[0]] = {}
+        actions[action][package[0]][package[1]] = packages[package]
 
     hours = int(DELTA) / 3600
-    report = 'Change in ownership over the last %s hours\n' % hours
-    report += '=' * (40 + len(str(hours))) + '\n'
-    orphaned = __format_dict(orphaned)
-    report += '\n%s packages were orphaned\n' % len(orphaned)
-    report += '-' * (len(str(len(orphaned))) + 23) + '\n'
+    report = 'Change in package status over the last %s hours\n' % hours
+    report += '=' * (45 + len(str(hours))) + '\n'
 
-    for pkg in sorted(orphaned, key=unicode.lower):
-        value = u'%(pkg_name)s [%(branches)s] was orphaned by %(user)s' % (
-                orphaned[pkg])
+    report += '\n%s packages were orphaned\n' % len(actions['orphaned'])
+    report += '-' * (len(str(len(actions['orphaned']))) + 23) + '\n'
+    for pkg in sorted(actions['orphaned']):
+        branches = [item for item in actions['orphaned'][pkg]]
+        agents = set([
+            actions['orphaned'][pkg][item]['msg']['agent']
+            for item in actions['orphaned'][pkg]])
+        value = u'%s [%s] was orphaned by %s' % (
+            pkg,
+            ', '.join(branches),
+            ', '.join(agents)
+        )
         report += value + '\n'
-        report += ' ' * 5 + orphaned[pkg]['summary'] + '\n'
+        report += ' ' * 5 + actions['orphaned'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
             'acls/name/%s\n' % pkg
 
-    unorphaned = __format_dict(unorphaned)
-    report += '\n%s packages unorphaned\n' % len(unorphaned)
-    report += '-' * (len(str(len(unorphaned))) + 20) + '\n'
-    for pkg in sorted(unorphaned, key=unicode.lower):
-        value = u'%s unorphaned : %s [%s]' % (
-            unorphaned[pkg]['user'].ljust(15), unorphaned[pkg]['pkg_name'],
-            unorphaned[pkg]['branches'])
+    report += '\n%s packages unorphaned\n' % len(actions['unorphaned'])
+    report += '-' * (len(str(len(actions['unorphaned']))) + 20) + '\n'
+    for pkg in sorted(actions['unorphaned']):
+        branches = [item for item in actions['unorphaned'][pkg]]
+        agents = set([
+            actions['unorphaned'][pkg][item]['msg']['agent']
+            for item in actions['unorphaned'][pkg]])
+        value = u'%s [%s] was unorphaned by %s' % (
+            pkg,
+            ', '.join(branches),
+            ', '.join(agents)
+        )
         report += value + '\n'
-
-    retired = __format_dict(retired)
-    report += '\n%s packages were retired\n' % len(retired)
-    report += '-' * (len(str(len(retired))) + 23) + '\n'
-    for pkg in sorted(retired, key=unicode.lower):
-        value = u'%(pkg_name)s [%(branches)s] was retired by %(user)s' % (
-                retired[pkg])
-        report += value + '\n'
-        report += ' ' * 5 + retired[pkg]['summary'] + '\n'
+        report += ' ' * 5 + actions['unorphaned'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
-            'acls/name/%s\n' % pkg[0]
+            'acls/name/%s\n' % pkg
 
-    unretired = __format_dict(unretired)
-    report += '\n%s packages were unretired\n' % len(unretired)
-    report += '-' * (len(str(len(unretired))) + 23) + '\n'
-    for pkg in sorted(unretired, key=unicode.lower):
-        value = u'%(pkg_name)s [%(branches)s] was unretired by %(user)s' % (
-                unretired[pkg])
+    report += '\n%s packages were retired\n' % len(actions['retired'])
+    report += '-' * (len(str(len(actions['retired']))) + 23) + '\n'
+    for pkg in sorted(actions['retired']):
+        branches = [item for item in actions['retired'][pkg]]
+        agents = set([
+            actions['retired'][pkg][item]['msg']['agent']
+            for item in actions['retired'][pkg]])
+        value = u'%s [%s] was retired by %s' % (
+            pkg,
+            ', '.join(branches),
+            ', '.join(agents)
+        )
         report += value + '\n'
-        report += ' ' * 5 + unretired[pkg]['summary'] + '\n'
+        report += ' ' * 5 + actions['retired'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
-            'acls/name/%s\n' % pkg[0]
+            'acls/name/%s\n' % pkg
 
-    changed = __format_dict(changed)
-    report += '\n%s packages changed owner\n' % len(changed)
-    report += '-' * (len(str(len(changed))) + 23) + '\n'
-    for pkg in sorted(changed, key=unicode.lower):
-        value = u'%s gave to %s    : %s [%s]' % (
-            changed[pkg]['user'].ljust(15), changed[pkg]['owner'].ljust(15),
-            changed[pkg]['pkg_name'], changed[pkg]['branches'])
+    report += '\n%s packages were unretired\n' % len(actions['unretired'])
+    report += '-' * (len(str(len(actions['unretired']))) + 23) + '\n'
+    for pkg in sorted(actions['unretired']):
+        branches = [item for item in actions['unretired'][pkg]]
+        agents = set([
+            actions['unretired'][pkg][item]['msg']['agent']
+            for item in actions['unretired'][pkg]])
+        value = u'%s [%s] was unretired by %s' % (
+            pkg,
+            ', '.join(branches),
+            ', '.join(agents)
+        )
         report += value + '\n'
+        report += ' ' * 5 + actions['unretired'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
+        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
+            'acls/name/%s\n' % pkg
+
+    report += '\n%s packages were given\n' % len(actions['given'])
+    report += '-' * (len(str(len(actions['given']))) + 23) + '\n'
+    for pkg in sorted(actions['given']):
+        branches = [item for item in actions['given'][pkg]]
+        agents = set([
+            actions['given'][pkg][item]['msg']['agent']
+            for item in actions['given'][pkg]])
+        owners = set([
+            actions['given'][pkg][item]['msg']['package_listing']['owner']
+            for item in actions['given'][pkg]])
+        value = u'%s [%s] was given by %s to %s' % (
+            pkg,
+            ', '.join(branches),
+            ', '.join(agents),
+            ', '.join(owners)
+        )
+        report += value + '\n'
+        report += ' ' * 5 + actions['given'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
+        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
+            'acls/name/%s\n' % pkg
+
+    report += '\n%s packages had new branches\n' % len(actions['new'])
+    report += '-' * (len(str(len(actions['new']))) + 23) + '\n'
+    for pkg in sorted(actions['new']):
+        branches = [item for item in actions['new'][pkg]]
+        agents = set([
+            actions['new'][pkg][item]['msg']['agent']
+            for item in actions['new'][pkg]])
+        owners = set([
+            actions['new'][pkg][item]['msg']['package_listing']['owner']
+            for item in actions['new'][pkg]])
+
+        if len(branches) == 1:
+            branch = ': %s' % branches[0]
+        else:
+            branch = 'es: %s' % ', '.join(branches)
+
+        value = u'%s had a new branch%s for %s by %s' % (
+            pkg,
+            branch,
+            ', '.join(owners),
+            ', '.join(agents),
+        )
+        report += value + '\n'
+        report += ' ' * 5 + actions['new'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
+        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
+            'acls/name/%s\n' % pkg
 
     report += '\n\nSources: https://github.com/pypingou/fedora-owner-change'
 
