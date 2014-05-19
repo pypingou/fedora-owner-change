@@ -235,24 +235,6 @@ def main():
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
             'package/%s\n' % pkg
 
-    report += '\n%s packages unorphaned\n' % len(actions['unorphaned'])
-    report += '-' * (len(str(len(actions['unorphaned']))) + 20) + '\n'
-    for pkg in sorted(actions['unorphaned']):
-        branches = [item for item in actions['unorphaned'][pkg]]
-        agents = set([
-            actions['unorphaned'][pkg][item]['msg']['agent']
-            for item in actions['unorphaned'][pkg]])
-        value = u'%s [%s] was unorphaned by %s' % (
-            pkg,
-            ', '.join(branches),
-            ', '.join(agents)
-        )
-        report += value + '\n'
-        report += ' ' * 5 + actions['unorphaned'][pkg][branches[0]]['msg'][
-            'package_listing']['package']['summary'] + '\n'
-        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
-            'package/%s\n' % pkg
-
     report += '\n%s packages were retired\n' % len(actions['retired'])
     report += '-' * (len(str(len(actions['retired']))) + 23) + '\n'
     for pkg in sorted(actions['retired']):
@@ -267,6 +249,24 @@ def main():
         )
         report += value + '\n'
         report += ' ' * 5 + actions['retired'][pkg][branches[0]]['msg'][
+            'package_listing']['package']['summary'] + '\n'
+        report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
+            'package/%s\n' % pkg
+
+    report += '\n%s packages unorphaned\n' % len(actions['unorphaned'])
+    report += '-' * (len(str(len(actions['unorphaned']))) + 20) + '\n'
+    for pkg in sorted(actions['unorphaned']):
+        branches = [item for item in actions['unorphaned'][pkg]]
+        agents = set([
+            actions['unorphaned'][pkg][item]['msg']['agent']
+            for item in actions['unorphaned'][pkg]])
+        value = u'%s [%s] was unorphaned by %s' % (
+            pkg,
+            ', '.join(branches),
+            ', '.join(agents)
+        )
+        report += value + '\n'
+        report += ' ' * 5 + actions['unorphaned'][pkg][branches[0]]['msg'][
             'package_listing']['package']['summary'] + '\n'
         report += ' ' * 5 + 'https://admin.fedoraproject.org/pkgdb/'\
             'package/%s\n' % pkg
