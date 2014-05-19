@@ -52,7 +52,7 @@ def send_report(report):
     """
     report = report.encode('utf-8', 'replace')
     msg = MIMEText(report)
-    msg['Subject'] = '[Owner-change] Fedora packages ownership change'
+    msg['Subject'] = '[POC-change] Fedora packages point of contact updates'
     msg['From'] = EMAIL_FROM
     msg['To'] = EMAIL_TO
 
