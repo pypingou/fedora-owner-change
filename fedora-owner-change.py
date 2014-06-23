@@ -77,6 +77,7 @@ def retrieve_pkgdb_change():
                 'topic': [
                     'org.fedoraproject.prod.pkgdb.owner.update',
                     'org.fedoraproject.prod.pkgdb.package.retire',
+                    'org.fedoraproject.prod.pkgdb.package.update.status',
                 ],
                 'rows_per_page': 100,
                 'page': page,
