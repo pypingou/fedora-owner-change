@@ -143,8 +143,8 @@ def get_category(message):
     if 'owner' in message['package_listing']:
         poc_key = 'owner'
 
-    if 'retirement' in message \
-            and message['retirement'] == 'retired':
+    if 'status' in message and message['status'] == 'Retired'\
+            and 'prev_status' in message:
         output = 'retired'
     elif 'retirement' in message \
             and message['retirement'] == 'unretired':
